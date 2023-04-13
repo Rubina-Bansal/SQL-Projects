@@ -1,0 +1,200 @@
+/*
+Covid 19 Data Exploration 
+Skills used: Joins, CTE's, Temp Tables, Windows Functions, Aggregate Functions, Creating Views, Converting Data Types
+*/
+
+
+-- Creating database and creating tables (importing required data)
+CREATE DATABASE CovidData;
+USE CovidData;
+
+
+LOAD DATA INFILE "C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/CovidDeaths.csv" INTO TABLE coviddata.coviddeaths
+FIELDS TERMINATED BY ',' ENCLOSED BY '"'
+LINES TERMINATED BY '\r\n'
+IGNORE 1 LINES; 
+
+SELECT * FROM coviddeaths;
+DESCRIBE coviddeaths;
+
+
+LOAD DATA INFILE "C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/CovidVaccinations.csv" INTO TABLE coviddata.CovidVaccinations
+FIELDS TERMINATED BY ',' ENCLOSED BY '"'
+LINES TERMINATED BY '\r\n'
+IGNORE 1 LINES;
+
+SELECT * FROM covidvaccinations;
+DESCRIBE covidvaccinations;
+
+UPDATE covidvaccinations SET DATE = str_to_date(DATE, '%d-%m-%Y') ;
+describe coviddata.covidvaccinations;
+
+
+
+-- Analysing data related to covid deaths
+
+-- DATA CLEANING
+DESCRIBE coviddata.coviddeaths;
+#1.
+ALTER TABLE coviddeaths MODIFY population BIGINT;
+#2.
+UPDATE coviddeaths SET continent = NULL WHERE continent like '0';
+#3.
+UPDATE coviddeaths SET date = str_to_date(date, '%d-%m-%Y');  
+ALTER TABLE coviddeaths MODIFY DATE DATE;
+DESCRIBE coviddata.coviddeaths;
+
+
+-- selecting required data
+SELECT location, date,total_cases, new_cases, total_deaths, population
+FROM coviddata.coviddeaths
+WHERE continent IS NOT NULL
+ORDER BY location, date ;
+
+
+-- Looking at the starting date of deaths for different countries
+SELECT location, date, total_deaths
+FROM coviddata.coviddeaths
+WHERE total_deaths !=0 AND continent IS NOT NULL
+GROUP BY location
+ORDER BY location, date ;
+
+/* make certain observations like deaths didn't happen till 'date', and the number of deaths on that day:
+location         date         total_deaths
+China	         2020-01-22	  17
+India	         2020-03-11	  1
+Pakistan	     2020-03-18	  2
+United Kingdom	 2020-01-30	  1
+United States	 2020-02-29	  1
+*/
+
+
+-- Total Cases vs Total Deaths
+SELECT location,date, total_cases, total_deaths, (total_deaths/total_cases)*100 AS percentage_people_died 
+FROM coviddata.coviddeaths
+WHERE continent IS NOT NULL AND location like 'india';
+
+/*Observation:
+There is a 1.188% chance that one can die if they contact covid now(2023-02-22) in India
+*/
+/* observations:
+The data starts from 30jan,2020 for india
+
+1. 'India	2020-03-11	62	1	1.6129032258064515'
+deaths started in India on 11march, 2023 & the death ratio for that day was 1.613%
+
+2. 1. 'India	2020-04-11	8446	288	3.409898176651669'
+a month after first death, on 11april,2020 the death ratio rose to 3.41%
+
+3. 'India	2021-01-30	10746174	154274	1.4356179231789845'
+stats for after a year(jan30,2021) death artio 1.44%
+
+4. 'India	2023-02-22	44686676	530763	1.1877432995911354'
+as of 22feb, 2023the death ratio in India is 1.188%
+LIKELIHOOD OF DYING/SURVIVNG IF CONTACT COVID TODAY/RECENTLY
+*/
+
+-- which country has the highest infection rates as compared to the population?
+SELECT ROW_NUMBER() OVER(), location, population, highest_infection_count, percentage_population_infected FROM (
+SELECT location,population, MAX(total_cases) AS highest_infection_count,
+MAX((total_cases/population))*100 AS percentage_population_infected
+FROM coviddata.coviddeaths
+WHERE continent IS NOT NULL
+GROUP BY location, population
+ORDER BY percentage_population_infected DESC)t1 ;
+
+-- 152	India	1417173120	44686676	3.1500
+-- India's rank is 152nd
+
+
+-- countries with the highest death count per population
+SELECT ROW_NUMBER() OVER() AS index_no, location, total_death_count FROM (
+SELECT location, MAX(CAST(total_deaths AS UNSIGNED INTEGER)) AS total_death_count
+FROM coviddata.coviddeaths
+WHERE continent IS NOT NULL
+GROUP BY location
+ORDER BY total_death_count DESC)t1 ;
+
+/*
+1	United States	1118719
+3	India	        530763
+*/
+
+
+-- countries with the highest death count per population, BY CONTINENT
+SELECT ROW_NUMBER() OVER() AS index_no, location, total_death_count FROM (
+SELECT location, MAX(CAST(total_deaths AS UNSIGNED INTEGER)) AS total_death_count
+FROM coviddata.coviddeaths
+WHERE continent IS NULL
+GROUP BY location
+ORDER BY total_death_count DESC)t1 ;
+
+
+
+-- GLOBAL 
+-- every day
+SELECT date, SUM(new_cases) AS rolling_sum_cases, SUM(CAST(new_deaths AS UNSIGNED INTEGER)) AS rolling_sum_deaths, 
+(SUM(CAST(new_deaths AS UNSIGNED INTEGER))/SUM(new_cases))*100 AS DeathPercentage
+FROM coviddata.coviddeaths
+WHERE continent IS NOT NULL
+GROUP BY date
+ORDER BY date ;
+
+
+-- total global till date
+SELECT SUM(new_cases) AS total_cases, SUM(CAST(new_deaths AS UNSIGNED INTEGER)) AS total_deaths, 
+(SUM(CAST(new_deaths AS UNSIGNED INTEGER))/SUM(new_cases))*100 AS DeathPercentage
+FROM coviddata.coviddeaths
+WHERE continent IS NOT NULL
+ORDER BY 1,2 ;
+
+
+-- JOIN
+SELECT * FROM coviddata.coviddeaths a JOIN coviddata.covidvaccinations b 
+ON a.location = b.location AND a.date = b.date;
+
+
+
+-- Total Population vs Vaccinations
+-- Shows Percentage of Population that has recieved at least one Covid Vaccine
+
+SELECT a.continent, a.location, a.date, a.population, b.new_vaccinations,
+SUM(CONVERT(b.new_vaccinations, UNSIGNED INT)) OVER (PARTITION BY a.Location ORDER BY a.location, a.Date) as people_vaccinated
+From coviddata.coviddeaths a JOIN coviddata.covidvaccinations b
+ON a.location = b.location AND a.date = b.date
+WHERE a.continent IS NOT NULL
+ORDER BY 2,3;
+
+-- total population vs vaccination for India
+SELECT a.continent, a.location, a.date, a.population, CAST(b.new_vaccinations AS UNSIGNED) AS new_vaccinations
+FROM coviddata.coviddeaths a JOIN coviddata.covidvaccinations b 
+ON a.location = b.location AND a.date = b.date
+WHERE a.continent IS NOT NULL AND a.location = 'india'
+ORDER BY 2,3;
+
+
+-- 1. CTE to get the percentage of people vaccinated
+WITH Pop_Vac AS (
+SELECT a.continent, a.location, a.date, a.population, CAST(b.new_vaccinations AS UNSIGNED) AS new_vaccinations,
+SUM(CAST(new_vaccinations AS UNSIGNED INTEGER)) OVER(PARTITION BY location ORDER BY a.location, a.date) AS total_vaccinated
+FROM coviddata.coviddeaths a JOIN coviddata.covidvaccinations b 
+ON a.location = b.location AND a.date = b.date
+WHERE a.continent IS NOT NULL
+ORDER BY 2,3) 
+SELECT continent, location, date, population, new_vaccinations, total_vaccinated, (total_vaccinated/population)*100 AS percentage_of_people_vaccinated
+FROM Pop_Vac ;
+
+
+
+
+-- creating view to store data for later visualizations
+
+CREATE VIEW percentPopVacc AS
+SELECT a.continent, a.location, a.date, a.population, CAST(b.new_vaccinations AS UNSIGNED INTEGER) AS new_vaccinations,
+SUM(CAST(new_vaccinations AS UNSIGNED INTEGER)) OVER(PARTITION BY location ORDER BY a.location, a.date) AS total_vaccinated
+FROM coviddata.coviddeaths a JOIN coviddata.covidvaccinations b 
+ON a.location = b.location AND a.date = b.date
+WHERE a.continent IS NOT NULL;
+SELECT *, (total_vaccinated/population)*100 AS percentage_of_people_vaccinated
+ FROM percentPopVacc
+ WHERE location LIKE '%india%';
