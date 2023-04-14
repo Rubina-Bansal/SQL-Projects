@@ -1,12 +1,15 @@
 CREATE DATABASE `sales and delivery`;
 USE `sales and delivery`;
 
+
+-- Getting to know our data
 SHOW TABLES;
 select * from cust_dimen;                                 
 select * from market_fact;                       
 select * from orders_dimen;                   
 select * from prod_dimen;                     
 select * from shipping_dimen;                 
+
 
 -- changing data type for the required columns
 ALTER TABLE orders_dimen MODIFY Order_Date DATE;
@@ -27,6 +30,15 @@ GROUP BY cd.cust_id
 ORDER BY number_of_orders DESC
 LIMIT 3;
 
+/* 
+Inference:
+The top three customers with maximum number of orders are Patrick, Lena, and Bill with 30,21 and 21 orders respectively.
+this SQL query is helpful in providing valuable insights for sales and marketing strategies.   
+*/
+
+
+
+
 
 -- ( question2): Create a new column DaysTakenForDelivery that contains the date difference between Order_Date and Ship_Date.
 CREATE TABLE Delivery AS (
@@ -37,16 +49,33 @@ ALTER TABLE Delivery ADD COLUMN DaysTakenForDelivery INT AS (DATEDIFF(ship_date,
 SELECT * FROM delivery;
 
 
+
+
+
 -- Question 3: Find the customer whose order took the maximum time to get delivered.
 SELECT c.Cust_id, c.Customer_Name, d.order_id, d.DaysTakenForDelivery 
 FROM delivery d INNER JOIN market_fact m ON d.ord_id=m.ord_id
 INNER JOIN cust_dimen c ON m.Cust_id = c.Cust_id
 ORDER BY DaysTakenForDelivery DESC LIMIT 1;
 
+/* Inference:
+The customer whose order took the maximum time to get delivered is Dean Percer, who had to wait for 92 days to get his order delivered. This analysis can be 
+used for further analysis to identify any issues in the delivery process and improve customer satisfaction.
+*/
+
+
+
 
 -- Question 4: Retrieve total sales made by each product from the data (use Windows function)
 SELECT * FROM market_fact;
 SELECT DISTINCT prod_id, sum(sales) OVER(PARTITION BY prod_id ) AS total_sales FROM market_fact ORDER BY total_sales DESC;
+
+/*
+Inference:
+From the output the product with product id 17 has made the maximum sales of more than 21 lakhs. The product wit the least sales id product 7, which
+made a sale of only 15 thousand.
+This query is helps in analysing the sales performance of different products and identifying the products with the highest total sales.
+*/
 
 
 
@@ -54,6 +83,16 @@ SELECT DISTINCT prod_id, sum(sales) OVER(PARTITION BY prod_id ) AS total_sales F
 SELECT * FROM market_fact;
 SELECT DISTINCT prod_id, ROUND(SUM(profit) OVER(PARTITION BY prod_id),2) AS total_product_profit
 FROM market_fact ORDER BY total_product_profit DESC ;
+
+/*
+Inference:
+From the result it can be seen that product 4 did the highest profit of more than 3 lakhs whereas product 7, product 16, product 10 and product 11 
+lead losses where product 11 was seen to have highest loss of more than 1 lakh . It is evident that product 4 and product 17 are the products with 
+highest sales and profit. It can also be observed that product 10 has fairly high sales but is still undergoing losses. This might be due to high-cost 
+price and low selling price.
+*/
+
+
 
 
 -- Question 6: Count the total number of unique customers in January 
@@ -76,4 +115,13 @@ IN (SELECT DISTINCT cust_id
 FROM combined_table
 WHERE month(order_date)=1
 AND year(order_date)=2011);
+
+/*
+It’s seen that a total of 154 customers costomers in January. Out of these customers, minimum 5 customers visit every month. There are 14 customers 
+in January who visited in march, October and November. These are observed to be the highest number of repetitive customers.
+*/
+
+
+
+
 
