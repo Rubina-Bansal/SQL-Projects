@@ -1,0 +1,79 @@
+CREATE DATABASE `sales and delivery`;
+USE `sales and delivery`;
+
+SHOW TABLES;
+select * from cust_dimen;                                 
+select * from market_fact;                       
+select * from orders_dimen;                   
+select * from prod_dimen;                     
+select * from shipping_dimen;                 
+
+-- changing data type for the required columns
+ALTER TABLE orders_dimen MODIFY Order_Date DATE;
+ALTER TABLE shipping_dimen MODIFY Ship_Date DATE;
+
+
+
+-- question 1: Find the top 3 customers who have the maximum number of orders
+SELECT * FROM cust_dimen;
+SELECT * FROM market_fact;
+SELECT 
+    cd.customer_name, COUNT(mf.ord_id) AS number_of_orders
+FROM
+    cust_dimen cd
+        INNER JOIN
+    market_fact mf ON cd.cust_id = mf.cust_id
+GROUP BY cd.cust_id
+ORDER BY number_of_orders DESC
+LIMIT 3;
+
+
+-- ( question2): Create a new column DaysTakenForDelivery that contains the date difference between Order_Date and Ship_Date.
+CREATE TABLE Delivery AS (
+SELECT od.order_id,od.order_date, od.ord_id, sd.ship_id, sd.ship_date
+FROM orders_dimen od INNER JOIN shipping_dimen sd ON od.ORDER_ID=sd.ORDER_ID);
+
+ALTER TABLE Delivery ADD COLUMN DaysTakenForDelivery INT AS (DATEDIFF(ship_date,order_date)) ;
+SELECT * FROM delivery;
+
+
+-- Question 3: Find the customer whose order took the maximum time to get delivered.
+SELECT c.Cust_id, c.Customer_Name, d.order_id, d.DaysTakenForDelivery 
+FROM delivery d INNER JOIN market_fact m ON d.ord_id=m.ord_id
+INNER JOIN cust_dimen c ON m.Cust_id = c.Cust_id
+ORDER BY DaysTakenForDelivery DESC LIMIT 1;
+
+
+-- Question 4: Retrieve total sales made by each product from the data (use Windows function)
+SELECT * FROM market_fact;
+SELECT DISTINCT prod_id, sum(sales) OVER(PARTITION BY prod_id ) AS total_sales FROM market_fact ORDER BY total_sales DESC;
+
+
+
+ -- question 5:  Retrieve the total profit made from each product from the data (use windows function)
+SELECT * FROM market_fact;
+SELECT DISTINCT prod_id, ROUND(SUM(profit) OVER(PARTITION BY prod_id),2) AS total_product_profit
+FROM market_fact ORDER BY total_product_profit DESC ;
+
+
+-- Question 6: Count the total number of unique customers in January 
+-- and how many of them came back every month over the entire year in 2011
+
+CREATE VIEW combined_table as(
+SELECT  cd.customer_name,cd.cust_id,mf.ord_id,od.order_date
+ FROM
+     cust_dimen cd
+        INNER JOIN
+     market_fact mf ON cd.cust_id = mf.cust_id
+         INNER JOIN
+     orders_dimen od ON mf.ord_id = od.ord_id);
+
+SELECT DISTINCT YEAR(order_date), MONTH(order_date), 
+count(cust_id) OVER(PARTITION BY MONTH(order_date) ORDER BY MONTH(order_date)) AS Total_Unique_Customers
+FROM combined_table
+WHERE year(order_date)=2011 AND cust_id
+IN (SELECT DISTINCT cust_id
+FROM combined_table
+WHERE month(order_date)=1
+AND year(order_date)=2011);
+
